@@ -32,8 +32,8 @@ type ConvTree struct {
 	Points           []Point
 	MinXLength       float64
 	MinYLength       float64
-	TopLeft          Point
-	BottomRight      Point
+	BottomLeft       Point
+	TopRight         Point
 	ChildTopLeft     *ConvTree
 	ChildTopRight    *ConvTree
 	ChildBottomLeft  *ConvTree
@@ -41,14 +41,14 @@ type ConvTree struct {
 	Stats            CellStats
 }
 
-func NewConvTree(topLeft Point, bottomRight Point, minXLength float64, minYLength float64, maxPoints int, maxDepth int,
+func NewConvTree(bottomLeft Point, topRight Point, minXLength float64, minYLength float64, maxPoints int, maxDepth int,
 	convNumber int, gridSize int, kernel [][]float64, initPoints []Point) (ConvTree, error) {
-	if topLeft.X >= bottomRight.X {
-		err := errors.New("X of top left point is larger or equal to X of bottom right point")
+	if bottomLeft.X >= topRight.X {
+		err := errors.New("X of bottom left point is larger or equal to X of top right point")
 		return ConvTree{}, err
 	}
-	if topLeft.Y >= bottomRight.Y {
-		err := errors.New("Y of top left point is larger or equal to Y of bottom right point")
+	if bottomLeft.Y >= topRight.Y {
+		err := errors.New("Y of bottom left point is larger or equal to Y of top right point")
 		return ConvTree{}, err
 	}
 	id, _ := uuid.NewV4()
@@ -60,24 +60,24 @@ func NewConvTree(topLeft Point, bottomRight Point, minXLength float64, minYLengt
 		}
 	}
 	tree := ConvTree{
-		IsLeaf:      true,
-		ID:          id.String(),
-		MaxPoints:   maxPoints,
-		GridSize:    gridSize,
-		ConvNum:     convNumber,
-		Kernel:      kernel,
-		MaxDepth:    maxDepth,
-		TopLeft:     topLeft,
-		BottomRight: bottomRight,
-		Points:      []Point{},
-		MinXLength:  minXLength,
-		MinYLength:  minYLength,
+		IsLeaf:     true,
+		ID:         id.String(),
+		MaxPoints:  maxPoints,
+		GridSize:   gridSize,
+		ConvNum:    convNumber,
+		Kernel:     kernel,
+		MaxDepth:   maxDepth,
+		BottomLeft: bottomLeft,
+		TopRight:   topRight,
+		Points:     []Point{},
+		MinXLength: minXLength,
+		MinYLength: minYLength,
 	}
 	if initPoints != nil {
 		tree.Points = initPoints
 	}
-	initXSize = bottomRight.X - topLeft.X
-	initYSize = bottomRight.Y - topLeft.Y
+	initXSize = topRight.X - bottomLeft.X
+	initYSize = topRight.Y - bottomLeft.Y
 	if tree.checkSplit() {
 		tree.split()
 	} else {
@@ -109,15 +109,15 @@ func checkKernel(kernel [][]float64) bool {
 func (tree *ConvTree) split() {
 	xSize, ySize := tree.GridSize, tree.GridSize
 	grid := make([][]float64, xSize)
-	xStep := (tree.BottomRight.X - tree.TopLeft.X) / float64(xSize)
-	yStep := (tree.BottomRight.Y - tree.TopLeft.Y) / float64(ySize)
+	xStep := (tree.TopRight.X - tree.BottomLeft.X) / float64(xSize)
+	yStep := (tree.TopRight.Y - tree.BottomLeft.Y) / float64(ySize)
 	for i := 0; i < xSize; i++ {
 		grid[i] = make([]float64, ySize)
 		for j := 0; j < ySize; j++ {
-			xLeft := tree.TopLeft.X + float64(i)*xStep
-			xRight := tree.TopLeft.X + float64(i+1)*xStep
-			yTop := tree.TopLeft.Y + float64(j)*yStep
-			yBottom := tree.TopLeft.Y + float64(j+1)*yStep
+			xLeft := tree.BottomLeft.X + float64(i)*xStep
+			xRight := tree.BottomLeft.X + float64(i+1)*xStep
+			yTop := tree.BottomLeft.Y + float64(j)*yStep
+			yBottom := tree.BottomLeft.Y + float64(j+1)*yStep
 			grid[i][j] = float64(tree.getNodeWeight(xLeft, xRight, yTop, yBottom))
 		}
 	}
@@ -141,25 +141,25 @@ func (tree *ConvTree) split() {
 	xOffset := float64(xMax) * xStep
 	yOffset := float64(yMax) * yStep
 
-	xRight := tree.TopLeft.X + xOffset
-	if xRight-tree.TopLeft.X < tree.MinXLength {
-		xRight = tree.TopLeft.X + tree.MinXLength
+	xRight := tree.BottomLeft.X + xOffset
+	if xRight-tree.BottomLeft.X < tree.MinXLength {
+		xRight = tree.BottomLeft.X + tree.MinXLength
 	}
-	if tree.BottomRight.X-xRight < tree.MinXLength {
-		xRight = tree.BottomRight.X - tree.MinXLength
+	if tree.TopRight.X-xRight < tree.MinXLength {
+		xRight = tree.TopRight.X - tree.MinXLength
 	}
-	yBottom := tree.TopLeft.Y + yOffset
-	if yBottom-tree.TopLeft.Y < tree.MinYLength {
-		yBottom = tree.TopLeft.Y + tree.MinYLength
+	yBottom := tree.BottomLeft.Y + yOffset
+	if yBottom-tree.BottomLeft.Y < tree.MinYLength {
+		yBottom = tree.BottomLeft.Y + tree.MinYLength
 	}
-	if tree.BottomRight.Y-yBottom < tree.MinYLength {
-		yBottom = tree.BottomRight.Y - tree.MinYLength
+	if tree.TopRight.Y-yBottom < tree.MinYLength {
+		yBottom = tree.TopRight.Y - tree.MinYLength
 	}
 	id, _ := uuid.NewV4()
 	tree.ChildTopLeft = &ConvTree{
-		ID:      id.String(),
-		TopLeft: tree.TopLeft,
-		BottomRight: Point{
+		ID:         id.String(),
+		BottomLeft: tree.BottomLeft,
+		TopRight: Point{
 			X: xRight,
 			Y: yBottom,
 		},
@@ -173,7 +173,7 @@ func (tree *ConvTree) split() {
 		MinYLength: tree.MinYLength,
 		IsLeaf:     true,
 	}
-	tree.ChildTopLeft.Points = tree.filterSplitPoints(tree.ChildTopLeft.TopLeft, tree.ChildTopLeft.BottomRight)
+	tree.ChildTopLeft.Points = tree.filterSplitPoints(tree.ChildTopLeft.BottomLeft, tree.ChildTopLeft.TopRight)
 	if tree.ChildTopLeft.checkSplit() {
 		tree.ChildTopLeft.split()
 	} else {
@@ -184,12 +184,12 @@ func (tree *ConvTree) split() {
 	id, _ = uuid.NewV4()
 	tree.ChildTopRight = &ConvTree{
 		ID: id.String(),
-		TopLeft: Point{
+		BottomLeft: Point{
 			X: xRight,
-			Y: tree.TopLeft.Y,
+			Y: tree.BottomLeft.Y,
 		},
-		BottomRight: Point{
-			X: tree.BottomRight.X,
+		TopRight: Point{
+			X: tree.TopRight.X,
 			Y: yBottom,
 		},
 		MaxPoints:  tree.MaxPoints,
@@ -202,7 +202,7 @@ func (tree *ConvTree) split() {
 		MinYLength: tree.MinYLength,
 		IsLeaf:     true,
 	}
-	tree.ChildTopRight.Points = tree.filterSplitPoints(tree.ChildTopRight.TopLeft, tree.ChildTopRight.BottomRight)
+	tree.ChildTopRight.Points = tree.filterSplitPoints(tree.ChildTopRight.BottomLeft, tree.ChildTopRight.TopRight)
 	if tree.ChildTopRight.checkSplit() {
 		tree.ChildTopRight.split()
 	} else {
@@ -213,13 +213,13 @@ func (tree *ConvTree) split() {
 	id, _ = uuid.NewV4()
 	tree.ChildBottomLeft = &ConvTree{
 		ID: id.String(),
-		TopLeft: Point{
-			X: tree.TopLeft.X,
+		BottomLeft: Point{
+			X: tree.BottomLeft.X,
 			Y: yBottom,
 		},
-		BottomRight: Point{
+		TopRight: Point{
 			X: xRight,
-			Y: tree.BottomRight.Y,
+			Y: tree.TopRight.Y,
 		},
 		MaxPoints:  tree.MaxPoints,
 		MaxDepth:   tree.MaxDepth,
@@ -231,7 +231,7 @@ func (tree *ConvTree) split() {
 		MinYLength: tree.MinYLength,
 		IsLeaf:     true,
 	}
-	tree.ChildBottomLeft.Points = tree.filterSplitPoints(tree.ChildBottomLeft.TopLeft, tree.ChildBottomLeft.BottomRight)
+	tree.ChildBottomLeft.Points = tree.filterSplitPoints(tree.ChildBottomLeft.BottomLeft, tree.ChildBottomLeft.TopRight)
 	if tree.ChildBottomLeft.checkSplit() {
 		tree.ChildBottomLeft.split()
 	} else {
@@ -242,22 +242,22 @@ func (tree *ConvTree) split() {
 	id, _ = uuid.NewV4()
 	tree.ChildBottomRight = &ConvTree{
 		ID: id.String(),
-		TopLeft: Point{
+		BottomLeft: Point{
 			X: xRight,
 			Y: yBottom,
 		},
-		BottomRight: tree.BottomRight,
-		MaxPoints:   tree.MaxPoints,
-		MaxDepth:    tree.MaxDepth,
-		Kernel:      tree.Kernel,
-		Depth:       tree.Depth + 1,
-		GridSize:    tree.GridSize,
-		ConvNum:     tree.ConvNum,
-		MinXLength:  tree.MinXLength,
-		MinYLength:  tree.MinYLength,
-		IsLeaf:      true,
+		TopRight:   tree.TopRight,
+		MaxPoints:  tree.MaxPoints,
+		MaxDepth:   tree.MaxDepth,
+		Kernel:     tree.Kernel,
+		Depth:      tree.Depth + 1,
+		GridSize:   tree.GridSize,
+		ConvNum:    tree.ConvNum,
+		MinXLength: tree.MinXLength,
+		MinYLength: tree.MinYLength,
+		IsLeaf:     true,
 	}
-	tree.ChildBottomRight.Points = tree.filterSplitPoints(tree.ChildBottomRight.TopLeft, tree.ChildBottomRight.BottomRight)
+	tree.ChildBottomRight.Points = tree.filterSplitPoints(tree.ChildBottomRight.BottomLeft, tree.ChildBottomLeft.TopRight)
 	if tree.ChildBottomRight.checkSplit() {
 		tree.ChildBottomRight.split()
 	} else {
@@ -372,23 +372,23 @@ func getSplitPoint(grid [][]float64) (int, int) {
 
 func (tree *ConvTree) Insert(point Point, allowSplit bool) {
 	if !tree.IsLeaf {
-		if point.X >= tree.ChildTopLeft.TopLeft.X && point.X <= tree.ChildTopLeft.BottomRight.X &&
-			point.Y >= tree.ChildTopLeft.TopLeft.Y && point.Y <= tree.ChildTopLeft.BottomRight.Y {
+		if point.X >= tree.ChildTopLeft.BottomLeft.X && point.X <= tree.ChildTopLeft.TopRight.X &&
+			point.Y >= tree.ChildTopLeft.BottomLeft.Y && point.Y <= tree.ChildTopLeft.TopRight.Y {
 			tree.ChildTopLeft.Insert(point, allowSplit)
 			return
 		}
-		if point.X >= tree.ChildTopRight.TopLeft.X && point.X <= tree.ChildTopRight.BottomRight.X &&
-			point.Y >= tree.ChildTopRight.TopLeft.Y && point.Y <= tree.ChildTopRight.BottomRight.Y {
+		if point.X >= tree.ChildTopRight.BottomLeft.X && point.X <= tree.ChildTopRight.TopRight.X &&
+			point.Y >= tree.ChildTopRight.BottomLeft.Y && point.Y <= tree.ChildTopRight.TopRight.Y {
 			tree.ChildTopRight.Insert(point, allowSplit)
 			return
 		}
-		if point.X >= tree.ChildBottomLeft.TopLeft.X && point.X <= tree.ChildBottomLeft.BottomRight.X &&
-			point.Y >= tree.ChildBottomLeft.TopLeft.Y && point.Y <= tree.ChildBottomLeft.BottomRight.Y {
+		if point.X >= tree.ChildBottomLeft.BottomLeft.X && point.X <= tree.ChildBottomLeft.TopRight.X &&
+			point.Y >= tree.ChildBottomLeft.BottomLeft.Y && point.Y <= tree.ChildBottomLeft.TopRight.Y {
 			tree.ChildBottomLeft.Insert(point, allowSplit)
 			return
 		}
-		if point.X >= tree.ChildBottomRight.TopLeft.X && point.X <= tree.ChildBottomRight.BottomRight.X &&
-			point.Y >= tree.ChildBottomRight.TopLeft.Y && point.Y <= tree.ChildBottomRight.BottomRight.Y {
+		if point.X >= tree.ChildBottomRight.BottomLeft.X && point.X <= tree.ChildBottomRight.TopRight.X &&
+			point.Y >= tree.ChildBottomRight.BottomLeft.Y && point.Y <= tree.ChildBottomRight.TopRight.Y {
 			tree.ChildBottomRight.Insert(point, allowSplit)
 			return
 		}
@@ -518,23 +518,23 @@ func (tree ConvTree) makePlot(p *plot.Plot, max int) (*plot.Plot, error) {
 		if err != nil {
 			return nil, err
 		}
-		p.X.Min = tree.TopLeft.X
-		p.X.Max = tree.BottomRight.X
-		p.Y.Min = tree.TopLeft.Y
-		p.Y.Max = tree.BottomRight.Y
+		p.X.Min = tree.BottomLeft.X
+		p.X.Max = tree.TopRight.X
+		p.Y.Min = tree.BottomLeft.Y
+		p.Y.Max = tree.TopRight.Y
 		p.Title.Text = "Plot"
 	}
 	lines := make(plotter.XYs, 5)
-	lines[0].X = tree.TopLeft.X
-	lines[0].Y = tree.TopLeft.Y
-	lines[1].X = tree.BottomRight.X
-	lines[1].Y = tree.TopLeft.Y
-	lines[2].X = tree.BottomRight.X
-	lines[2].Y = tree.BottomRight.Y
-	lines[3].X = tree.TopLeft.X
-	lines[3].Y = tree.BottomRight.Y
-	lines[4].X = tree.TopLeft.X
-	lines[4].Y = tree.TopLeft.Y
+	lines[0].X = tree.BottomLeft.X
+	lines[0].Y = tree.BottomLeft.Y
+	lines[1].X = tree.TopRight.X
+	lines[1].Y = tree.BottomLeft.Y
+	lines[2].X = tree.TopRight.X
+	lines[2].Y = tree.TopRight.Y
+	lines[3].X = tree.BottomLeft.X
+	lines[3].Y = tree.TopRight.Y
+	lines[4].X = tree.BottomLeft.X
+	lines[4].Y = tree.BottomLeft.Y
 	l, err := plotter.NewLine(lines)
 	if err != nil {
 		return nil, err
@@ -615,7 +615,7 @@ func plotGrid(grid [][]float64, depth int, id string) {
 }
 
 func (tree ConvTree) checkSplit() bool {
-	cond1 := (tree.BottomRight.X-tree.TopLeft.X) > 2*tree.MinXLength && (tree.BottomRight.Y-tree.TopLeft.Y) > 2*tree.MinYLength
+	cond1 := (tree.TopRight.X-tree.BottomLeft.X) > 2*tree.MinXLength && (tree.TopRight.Y-tree.BottomLeft.Y) > 2*tree.MinYLength
 	totalWeight := 0
 	for _, point := range tree.Points {
 		totalWeight += point.Weight
